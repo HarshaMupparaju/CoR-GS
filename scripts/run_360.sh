@@ -1,11 +1,12 @@
 export CUDA_VISIBLE_DEVICES=$1
 dataset=$2 
 workspace=$3
-
+n_views=$4
+downsample_factor=$5
 
 python train.py \
 --source_path $dataset -m $workspace \
---eval  -r 4 --n_views 24 \
+--eval  -r $downsample_factor --n_views $n_views \
 --random_background \
 --iterations 30000 --position_lr_max_steps 30000 \
 --densify_until_iter 15000 \

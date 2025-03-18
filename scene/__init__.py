@@ -46,7 +46,7 @@ class Scene:
         self.test_cameras = {}
         self.pseudo_cameras = {}
         self.bounds = None
-
+        # Scene info is loaded here, #TODO: Check whether self.n_sparse is used anywhere (I don't think it is used) as it is set -1, might be using the whole dataset for some sparse nerf which we don't want
         if os.path.exists(os.path.join(args.source_path, "sparse")):
             if args.source_path.find('llff') != -1:
                 print("############ load llff ############")
@@ -75,8 +75,8 @@ class Scene:
                 camlist.extend(scene_info.train_cameras)
             for id, cam in enumerate(camlist):
                 json_cams.append(camera_to_JSON(id, cam))
-            with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
-                json.dump(json_cams, file)
+            with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:#TODO: Check if the full res images are also used for training
+                json.dump(json_cams, file) # Dumps all test and train camera data to output dir as a JSON file, the camera resolutions in these are full res - 4K for LLFF
 
         if shuffle:
             random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
@@ -86,7 +86,7 @@ class Scene:
         print(self.cameras_extent, 'cameras_extent')
 
         for resolution_scale in resolution_scales:
-            print("Loading Training Cameras", resolution_scale)
+            print("Loading Training Cameras", resolution_scale) #Cameras are downsampled based on height/(resolution_scale [1] * args.resolution [8]))
             self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
             print("Loading Test Cameras", resolution_scale)
             self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)

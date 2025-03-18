@@ -15,7 +15,8 @@ from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianR
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh
 
-
+# torch.set_num_threads(1)
+# torch.set_num_interop_threads(1)
 
 def render(viewpoint_camera, pc, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0,
            override_color = None, white_bg = False):
@@ -26,6 +27,7 @@ def render(viewpoint_camera, pc, pipe, bg_color : torch.Tensor, scaling_modifier
     """
 
     # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
+    # torch.zeros((1000,), device="cuda", dtype=torch.int64)
     screenspace_points = torch.zeros_like(pc.get_xyz, dtype=pc.get_xyz.dtype, requires_grad=True, device="cuda") + 0
     try:
         screenspace_points.retain_grad()
@@ -56,7 +58,7 @@ def render(viewpoint_camera, pc, pipe, bg_color : torch.Tensor, scaling_modifier
         debug=pipe.debug,
         confidence=confidence
     )
-
+    # torch.zeros((1000,), device="cuda", dtype=torch.int64)
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
 
     means3D = pc.get_xyz
@@ -90,8 +92,10 @@ def render(viewpoint_camera, pc, pipe, bg_color : torch.Tensor, scaling_modifier
     else:
         colors_precomp = override_color
 
-
+    # torch.zeros((1000,), device="cuda", dtype=torch.int64)
     # Rasterize visible Gaussians to image, obtain their radii (on screen).
+
+
     rendered_image, radii, depth, alpha = rasterizer(
         means3D = means3D,
         means2D = means2D,
@@ -101,6 +105,7 @@ def render(viewpoint_camera, pc, pipe, bg_color : torch.Tensor, scaling_modifier
         scales = scales,
         rotations = rotations,
         cov3D_precomp = cov3D_precomp)
+
 
     if min(pc.bg_color.shape) != 0:
         rendered_image = rendered_image + (1 - alpha) * torch.sigmoid(pc.bg_color)  # torch.ones((3, 1, 1)).cuda()

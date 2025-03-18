@@ -14,35 +14,31 @@ try:
 except ImportError:
     TENSORBOARD_FOUND = False
 
-import torchvision
-import numpy as np
-import matplotlib.cm as cm
 import os
-import matplotlib.pyplot as plt
-import torch
-import torch.nn.functional as F
-from torchmetrics import PearsonCorrCoef
-from torchmetrics.functional.regression import pearson_corrcoef
-from random import randint
-from utils.loss_utils import l1_loss, l1_loss_mask, l2_loss, ssim, loss_photometric
-from gaussian_renderer import render, network_gui
+import random
 import sys
+import uuid
+from argparse import ArgumentParser, Namespace
+from random import randint
+
+import numpy as np
+# import kmeans1d
+import open3d as o3d
+import torch
+import torchvision
+from tqdm import tqdm
+
+from arguments import ModelParams, PipelineParams, OptimizationParams
+from gaussian_renderer import render, network_gui
+from lpipsPyTorch import lpips
 from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
-import uuid
-from tqdm import tqdm
 from utils.image_utils import psnr
-from argparse import ArgumentParser, Namespace
-from arguments import ModelParams, PipelineParams, OptimizationParams
-from lpipsPyTorch import lpips
-import random
+from utils.loss_utils import l1_loss, ssim, loss_photometric
+from utils.visualization_utils import depth2image
 
-from utils.visualization_utils import depth2image, visualize_cmap
-
-import kmeans1d
-import open3d as o3d
-
-import copy
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
 
 def seed_everything(seed):
     random.seed(seed)
@@ -145,7 +141,9 @@ def training(dataset, opt, pipe, args):
         logDict = {}
 
         # render for main viewpoint
-        bg = torch.rand((3), device="cuda") if opt.random_background else background
+        bg = torch.rand(3) if opt.random_background else background
+        #Set bg to cuda
+        bg = bg.to("cuda")
 
         for i in range(args.gaussiansN):
             RenderDict[f"render_pkg_gs{i}"] = render(viewpoint_cam, GsDict[f'gs{i}'], pipe, bg)

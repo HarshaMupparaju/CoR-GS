@@ -128,7 +128,7 @@ def round_python3(number):
         return 2.0 * round(number / 2.0)
     return rounded
 
-def pipeline(scene, base_path, n_views):
+def pipeline(scene, base_path, n_views, r):
     llffhold = 8
     view_path = str(n_views) + '_views'
     os.chdir(base_path + scene)
@@ -159,16 +159,49 @@ def pipeline(scene, base_path, n_views):
                 images[image_name] = elems[1:]
 
     img_list = sorted(images.keys(), key=lambda x: x)
-    train_img_list = [c for idx, c in enumerate(img_list) if idx % llffhold != 0]
+    frame_nums = list(range(0, len(img_list)))
+    test_frame_nums = list(range(0, len(img_list), 8))
+    train_frame_nums = list(set(frame_nums) - set(test_frame_nums))
+    train_img_list = [c for idx, c in enumerate(img_list) if idx in train_frame_nums]
+    # train_img_list = [c for idx, c in enumerate(img_list) if idx % llffhold != 0]
     if n_views > 0:
-        idx_sub = [round_python3(i) for i in np.linspace(0, len(train_img_list)-1, n_views)]
-        train_img_list = [c for idx, c in enumerate(train_img_list) if idx in idx_sub]
+        # idx_sub = [round_python3(i) for i in np.linspace(0, len(train_img_list)-1, n_views)]
+        idx_sub = np.round(np.linspace(-1, len(train_img_list), n_views+2)).astype('int')[1:-1]
+        final_idx_sub = [train_frame_nums[i] for i in idx_sub]
+        train_img_list = [c for idx, c in enumerate(img_list) if idx in final_idx_sub]
 
-
-    for img_name in train_img_list:
-        os.system('cp ../images/' + img_name + '  images/' + img_name)
+    full_res_img_names = []
+    for idx, img_name in enumerate(train_img_list):
+        if(r != 1):
+            full_res_img_names.append(img_name)
+            img_name = img_name.replace('.jpg', '.png')
+            if(scene != 'horns' and scene != 'room' and scene != 'trex'):
+                img_name = f'image{final_idx_sub[idx]:03d}.png'
+            if(scene == 'room'):
+                img_name = img_name.replace('.JPG', '.png')
+            os.system(f'cp ../images_{r}/' + img_name + '  images/' + img_name)
+        else:
+            os.system(f'cp ../images/' + img_name + '  images/' + img_name)
 
     os.system('cp ../sparse/0/cameras.txt created/.')
+    if(r != 1):
+        #I want to change few values in this file
+        with open('created/cameras.txt', "r") as fid:
+            lines = fid.readlines()
+        with open('created/cameras.txt', "w") as fid:
+            for line in lines:
+                if len(line) > 0 and line[0] != "#":
+                    elems = line.split()
+                    elems[2] = str(int(int(elems[2])/r))
+                    elems[3] = str(int(int(elems[3])/r))
+                    elems[4] = str(float(float(elems[4])/r))
+                    elems[5] = str(int(int(elems[5])/r))
+                    elems[6] = str(int(int(elems[6])/r))
+
+                    fid.write(' '.join(elems) + '\n')
+                elif(len(line) > 0 and line[0] == '#'):
+                    fid.write(line)
+
     with open('created/points3D.txt', "w") as fid:
         pass
 
@@ -180,8 +213,17 @@ def pipeline(scene, base_path, n_views):
     print(img_rank, res)
     with open('created/images.txt', "w") as fid:
         for idx, img_name in enumerate(img_rank):
-            print(img_name)
+            if(r != 1):
+                img_name = full_res_img_names[idx]
             data = [str(1 + idx)] + [' ' + item for item in images[os.path.basename(img_name)]] + ['\n\n']
+            if(r != 1):
+                if (scene != 'horns' and scene != 'room' and scene != 'trex'):
+                    data[9] = f' image{final_idx_sub[idx]:03d}.png'
+                else:
+                    if(scene == 'room'):
+                        data[9] = data[9].replace('.JPG', '.png')
+                    else:
+                        data[9] = data[9].replace('.jpg', '.png')
             fid.writelines(data)
 
     os.system('colmap point_triangulator --database_path database.db --image_path images --input_path created  --output_path triangulated  --Mapper.ba_local_max_num_iterations 40 --Mapper.ba_local_max_refinements 3 --Mapper.ba_global_max_num_iterations 100')
@@ -191,7 +233,9 @@ def pipeline(scene, base_path, n_views):
     os.system('colmap stereo_fusion --workspace_path dense --output_path dense/fused.ply')
 
 
-for scene in ['fern', 'flower', 'fortress',  'horns',  'leaves',  'orchids',  'room',  'trex']:# ['bonsai', 'counter', 'garden', 'kitchen', 'room', 'stump']:
-    pipeline(scene, base_path = '/data1/gary/data/debug/nerf_llff_data/', n_views = 6)  # please use absolute path!
+# for scene in ['room']:# ['bonsai', 'counter', 'garden', 'kitchen', 'room', 'stump']:
+#     pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 2)  # please use absolute path!
+#     pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 3, r = 4)
+#     pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 4, r = 4)
 
-# pipeline('fern', base_path = '/data1/gary/data/debug/nerf_llff_data/', n_views = 3)
+pipeline('room', base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 5, r = 4)

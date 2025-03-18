@@ -2,6 +2,7 @@ import os
 import numpy as np
 import sys
 import sqlite3
+import math
 
 
 IS_PYTHON3 = sys.version_info[0] >= 3
@@ -129,6 +130,12 @@ def round_python3(number):
     return rounded
 
 def pipeline(scene, base_path, n_views):
+    r = 1
+    if(scene == 'bicycle' or scene == 'garden' or scene == 'stump'):
+        r = 4 #Outdoor scenes
+    else:
+        r = 2 #Indoor scenes
+
     llffhold = 8
     view_path = str(n_views) + '_views'
     os.chdir(base_path + scene)
@@ -159,20 +166,59 @@ def pipeline(scene, base_path, n_views):
                 images[image_name] = elems[1:]
 
     img_list = sorted(images.keys(), key=lambda x: x)
-    train_img_list = [c for idx, c in enumerate(img_list) if idx % llffhold != 0]
+    frame_nums = list(range(0, len(img_list)))
+    test_frame_nums = list(range(0, len(img_list), 8))
+    train_frame_nums = list(set(frame_nums) - set(test_frame_nums))
+    train_img_list = [c for idx, c in enumerate(img_list) if idx in train_frame_nums]
+    # train_img_list = [c for idx, c in enumerate(img_list) if idx % llffhold != 0]
     if n_views > 0:
-        idx_sub = [round_python3(i) for i in np.linspace(0, len(train_img_list)-1, n_views)]
-        train_img_list = [c for idx, c in enumerate(train_img_list) if idx in idx_sub]
+        # idx_sub = [round_python3(i) for i in np.linspace(0, len(train_img_list)-1, n_views)]
+        idx_sub = np.round(np.linspace(-1, len(train_img_list), n_views+2)).astype('int')[1:-1]
+        final_idx_sub = [train_frame_nums[i] for i in idx_sub]
+        train_img_list = [c for idx, c in enumerate(img_list) if idx in final_idx_sub]
 
 
     for img_name in train_img_list:
-        os.system('cp ../images/' + img_name + '  images/' + img_name)
+        if r != 1:
+            os.system(f'cp ../images_{r}/' + img_name + '  images/' + img_name)
+        else:
+            os.system(f'cp ../images/' + img_name + '  images/' + img_name)
 
     os.system('cp ../sparse/0/cameras.txt created/.')
+    if(r != 1):
+        #I want to change few values in this file
+        with open('created/cameras.txt', "r") as fid:
+            lines = fid.readlines()
+        with open('created/cameras.txt', "w") as fid:
+            for line in lines:
+                if len(line) > 0 and line[0] != "#":
+                    # if(scene == 'garden'):
+                    #     elems = line.split()
+                    #     elems[2] = str(int(math.floor(float(elems[2])/r))) #PINHOLE camera model
+                    #     elems[3] = str(int(math.floor(float(elems[3])/r)))
+                    #     elems[4] = str(float(float(elems[4])/r))
+                    #     elems[5] = str(float(float(elems[5])/r))
+                    #     elems[6] = str(int(math.floor(float(elems[6])/r)))
+                    #     elems[7] = str(int(math.floor(float(elems[7])/r)))
+
+                    #     fid.write(' '.join(elems) + '\n')   
+                    # else:                     
+                    elems = line.split()
+                    elems[2] = str(int(round(float(elems[2])/r))) #PINHOLE camera model
+                    elems[3] = str(int(round(float(elems[3])/r)))
+                    elems[4] = str(float(float(elems[4])/r))
+                    elems[5] = str(float(float(elems[5])/r))
+                    elems[6] = str(int(round(float(elems[6])/r)))
+                    elems[7] = str(int(round(float(elems[7])/r)))
+
+                    fid.write(' '.join(elems) + '\n')
+                elif(len(line) > 0 and line[0] == '#'):
+                    fid.write(line)
+
     with open('created/points3D.txt', "w") as fid:
         pass
 
-    res = os.popen( 'colmap feature_extractor --database_path database.db --image_path images  --SiftExtraction.max_image_size 4032 --SiftExtraction.max_num_features 16384 --SiftExtraction.estimate_affine_shape 1 --SiftExtraction.domain_size_pooling 1').read()
+    res = os.popen( 'colmap feature_extractor --database_path database.db --image_path images  --SiftExtraction.max_image_size 4032 --SiftExtraction.max_num_features 32768 --SiftExtraction.estimate_affine_shape 1 --SiftExtraction.domain_size_pooling 1').read()
     os.system( 'colmap exhaustive_matcher --database_path database.db --SiftMatching.guided_matching 1 --SiftMatching.max_num_matches 32768')
     db = COLMAPDatabase.connect('database.db')
     db_images = db.execute("SELECT * FROM images")
@@ -191,6 +237,9 @@ def pipeline(scene, base_path, n_views):
     os.system('colmap stereo_fusion --workspace_path dense --output_path dense/fused.ply')
 
 
-for scene in ['bicycle', 'bonsai', 'counter', 'garden',  'kitchen', 'room', 'stump']:
-    pipeline(scene, base_path = '/data/mipnerf360/', n_views = 24)  # please use absolute path!
-
+# for scene in ['bicycle', 'bonsai', 'counter', 'garden',  'kitchen', 'room', 'stump']:
+for scene in ['garden']:
+    pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/mipnerf360/', n_views = 12)  # please use absolute path!
+    pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/mipnerf360/', n_views = 20)
+    pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/mipnerf360/', n_views = 36)
+# pipeline('garden', base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/mipnerf360/', n_views = 12)

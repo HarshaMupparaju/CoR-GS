@@ -314,6 +314,7 @@ def readColmapSceneInfo(path, images, eval, n_views=0, llffhold=8, rand_pcd=Fals
         ply_path = os.path.join(path, str(n_views) + "_views/dense/fused.ply")
 
     try:
+        #TODO: Verify that the extrinsics and intrinsics are for the downsampled images
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cam_extrinsics = read_extrinsics_binary(cameras_extrinsic_file)
@@ -345,18 +346,25 @@ def readColmapSceneInfo(path, images, eval, n_views=0, llffhold=8, rand_pcd=Fals
     cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics,
                              images_folder=os.path.join(path, reading_dir),  path=path, rgb_mapping=rgb_mapping)
     cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
-
+    # Train and test views are picked for training and evaluation
     if eval:
-        train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
-        test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
+        # train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
+        # test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
+        frame_nums = list(range(0, len(cam_infos)))
+        test_frame_nums = list(range(0, len(cam_infos), 8))
+        train_frame_nums = list(set(frame_nums) - set(test_frame_nums))
+        train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx in train_frame_nums]
+        test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx in test_frame_nums]
     else:
         train_cam_infos = cam_infos
         test_cam_infos = []
 
     if n_views > 0:
-        idx_sub = np.linspace(0, len(train_cam_infos)-1, n_views)
-        idx_sub = [round(i) for i in idx_sub]
-        train_cam_infos = [c for idx, c in enumerate(train_cam_infos) if idx in idx_sub]
+        # idx_sub = np.linspace(0, len(train_cam_infos)-1, n_views)
+        # idx_sub = [round(i) for i in idx_sub]
+        idx_sub = np.round(np.linspace(-1, len(train_cam_infos), n_views+2)).astype('int')[1:-1]
+        final_idx_sub = [train_frame_nums[i] for i in idx_sub]
+        train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx in final_idx_sub]
         assert len(train_cam_infos) == n_views
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
