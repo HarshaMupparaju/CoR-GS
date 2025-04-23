@@ -15,14 +15,18 @@ import cv2
 from tqdm import tqdm
 from utils.general_utils import PILtoTorch
 from utils.graphics_utils import fov2focal
+import math
 
 WARNED = False
+
+def proper_round(n):
+    return math.ceil(n) if n % 1 >= 0.5 else math.floor(n)
 
 def loadCam(args, id, cam_info, resolution_scale):
     orig_w, orig_h = cam_info.image.size
 
     if args.resolution in [1, 2, 4, 8]:
-        resolution = round(orig_w/(resolution_scale * args.resolution)), round(orig_h/(resolution_scale * args.resolution))
+        resolution = proper_round(orig_w/(resolution_scale * args.resolution)), proper_round(orig_h/(resolution_scale * args.resolution))
     else:  # should be a type that converts to float
         if args.resolution == -1:
             if orig_w > 1600:

@@ -5,9 +5,13 @@ import json
 output_dir = Path('/mnt/2tb-hdd/Harsha/CoR-GS/output')
 
 # dataset_name = 'llff'
-# views = 4
-dataset_name = 'mipnerf360'
-views = 36
+# views = 2
+
+# dataset_name = 'mipnerf360'
+# views = 36
+
+dataset_name = 'realestate'
+views = 2
 
 dataset_output_dir = output_dir / f'{dataset_name}_{views}'
 scenes = dataset_output_dir.glob('*')
@@ -21,7 +25,7 @@ for scene in scenes:
     with open(scene_results_path, 'r') as f:
         scene_results = json.load(f)
         # Parse the results and average over all scenes
-        if dataset_name == 'llff':
+        if (dataset_name == 'llff' or dataset_name == 'realestate'):
             scene_results = scene_results['ours_10000']
         elif dataset_name == 'mipnerf360':
             scene_results = scene_results['ours_30000']

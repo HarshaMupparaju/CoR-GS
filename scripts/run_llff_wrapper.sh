@@ -1,16 +1,16 @@
 scene_names=(
-    # "fern"
-    # "flower"
-    # "fortress"
-    # "horns"
-    # "leaves"
-    # "orchids"
+    "fern"
+    "flower"
+    "fortress"
+    "horns"
+    "leaves"
+    "orchids"
     "room"
-    # "trex"
+    "trex"
 )
 
 n_views_list=(
-    # 2
+    2
     3
     4
 )

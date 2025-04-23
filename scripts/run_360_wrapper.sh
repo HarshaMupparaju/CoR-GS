@@ -1,17 +1,17 @@
 scene_names=(
-    # "bicycle"
+    "bicycle"
     # "bonsai"
     # "counter"
-    "garden"
+    # "garden"
     # "kitchen"
     # "room"
-    # "stump"
+    "stump"
 )
 
 n_views_list=(
     12
     20
-    36
+    # 36
 )
 
 for n_views in "${n_views_list[@]}"

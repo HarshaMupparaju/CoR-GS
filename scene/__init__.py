@@ -18,7 +18,7 @@ from scene.dataset_readers import sceneLoadTypeCallbacks
 from scene.gaussian_model import GaussianModel
 from arguments import ModelParams
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
-from utils.pose_utils import generate_random_poses_llff, generate_random_poses_360
+from utils.pose_utils import generate_random_poses_llff, generate_random_poses_360, generate_random_poses_realestate
 from scene.cameras import PseudoCamera
 
 class Scene:
@@ -57,6 +57,9 @@ class Scene:
             elif args.source_path.find('DTU') != -1:
                 print("############ load DTU ############")
                 scene_info = sceneLoadTypeCallbacks["DTU"](args.source_path, args.images, args.eval, args.n_views, rand_pcd=args.rand_pcd)
+            elif args.source_path.find('RealEstate10K') != -1:
+                print("############ load Real Estate 10K ############")
+                scene_info = sceneLoadTypeCallbacks["RealEstate"](args.source_path, args.images, args.eval, args.n_views, rand_pcd=args.rand_pcd)
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
             print("Found transforms_train.json file, assuming Blender data set!")
             scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval, args.n_views, rand_pcd=args.rand_pcd)
@@ -99,6 +102,8 @@ class Scene:
             elif args.source_path.find('synthetic') != -1:
                 pseudo_poses = generate_random_poses_360(self.train_cameras[resolution_scale])
             elif args.source_path.find('DTU') != -1:
+                pseudo_poses = generate_random_poses_llff(self.train_cameras[resolution_scale])
+            elif args.source_path.find('RealEstate10K') != -1:
                 pseudo_poses = generate_random_poses_llff(self.train_cameras[resolution_scale])
 
             view = self.train_cameras[resolution_scale][0]

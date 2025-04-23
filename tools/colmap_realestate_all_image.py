@@ -2,8 +2,7 @@ import os
 import numpy as np
 import sys
 import sqlite3
-import math
-
+from scipy.spatial.transform import Rotation
 
 IS_PYTHON3 = sys.version_info[0] >= 3
 MAX_IMAGE_ID = 2**31 - 1
@@ -129,16 +128,18 @@ def round_python3(number):
         return 2.0 * round(number / 2.0)
     return rounded
 
-def proper_round(n):
-    return math.ceil(n) if n % 1 >= 0.5 else math.floor(n)
+def get_quaternions_and_translations(trans_mat: np.ndarray):
+    rot_mat = trans_mat[:3, :3]
+    rotation = Rotation.from_matrix(rot_mat)
+    assert type(rotation) == Rotation
+    quaternions = rotation.as_quat()
+    quaternions = np.roll(quaternions, 1)
+    quaternions_str = ' '.join(quaternions.astype('str'))
+    translations = trans_mat[:3, 3]
+    translations_str = ' '.join(translations.astype('str'))
+    return quaternions_str, translations_str
 
-def pipeline(scene, base_path, n_views):
-    r = 1
-    if(scene == 'bicycle' or scene == 'garden' or scene == 'stump'):
-        r = 4 #Outdoor scenes
-    else:
-        r = 2 #Indoor scenes
-
+def pipeline(scene, base_path, n_views, r):
     llffhold = 8
     view_path = str(n_views) + '_views'
     os.chdir(base_path + scene)
@@ -148,75 +149,94 @@ def pipeline(scene, base_path, n_views):
     os.mkdir('created')
     os.mkdir('triangulated')
     os.mkdir('images')
-    os.system('colmap model_converter  --input_path ../sparse/0/ --output_path ../sparse/0/  --output_type TXT')
+    # os.system('colmap model_converter  --input_path ../sparse/0/ --output_path ../sparse/0/  --output_type TXT')
+
+    intrinsics_filepath = f'{base_path}{scene}/CameraIntrinsics.csv'
+    extrinsics_filepath = f'{base_path}{scene}/CameraExtrinsics.csv'
+    
 
 
-    images = {}
-    with open('../sparse/0/images.txt', "r") as fid:
-        while True:
-            line = fid.readline()
-            if not line:
-                break
-            line = line.strip()
-            if len(line) > 0 and line[0] != "#":
-                elems = line.split()
-                image_id = int(elems[0])
-                qvec = np.array(tuple(map(float, elems[1:5])))
-                tvec = np.array(tuple(map(float, elems[5:8])))
-                camera_id = int(elems[8])
-                image_name = elems[9]
-                fid.readline().split()
-                images[image_name] = elems[1:]
+    # images = {}
+    # with open('../sparse/0/images.txt', "r") as fid:
+    #     while True:
+    #         line = fid.readline()
+    #         if not line:
+    #             break
+    #         line = line.strip()
+    #         if len(line) > 0 and line[0] != "#":
+    #             elems = line.split()
+    #             image_id = int(elems[0])
+    #             qvec = np.array(tuple(map(float, elems[1:5])))
+    #             tvec = np.array(tuple(map(float, elems[5:8])))
+    #             camera_id = int(elems[8])
+    #             image_name = elems[9]
+    #             fid.readline().split()
+    #             images[image_name] = elems[1:]
 
-    img_list = sorted(images.keys(), key=lambda x: x)
-    frame_nums = list(range(0, len(img_list)))
-    test_frame_nums = list(range(0, len(img_list), 8))
-    train_frame_nums = list(set(frame_nums) - set(test_frame_nums))
-    train_img_list = [c for idx, c in enumerate(img_list) if idx in train_frame_nums]
+    # img_list = sorted(images.keys(), key=lambda x: x)
+    # frame_nums = list(range(0, len(img_list)))
+    # test_frame_nums = list(range(0, len(img_list), 8))
+    # train_frame_nums = list(set(frame_nums) - set(test_frame_nums))
+    # train_img_list = [c for idx, c in enumerate(img_list) if idx in train_frame_nums]
+    # train_frame_nums = list(range(5, 50, 10))
+    # test_frame_nums = list(set(range(50)) - set(train_frame_nums))
+    train_frame_nums = list(range(0, 50))
+
     # train_img_list = [c for idx, c in enumerate(img_list) if idx % llffhold != 0]
     if n_views > 0:
         # idx_sub = [round_python3(i) for i in np.linspace(0, len(train_img_list)-1, n_views)]
-        idx_sub = np.round(np.linspace(-1, len(train_img_list), n_views+2)).astype('int')[1:-1]
-        final_idx_sub = [train_frame_nums[i] for i in idx_sub]
-        train_img_list = [c for idx, c in enumerate(img_list) if idx in final_idx_sub]
+        # idx_sub = np.round(np.linspace(-1, len(train_img_list), n_views+2)).astype('int')[1:-1]
+        # final_idx_sub = [train_frame_nums[i] for i in idx_sub]
+        # train_img_list = [c for idx, c in enumerate(img_list) if idx in final_idx_sub]
+        num_extrapolation_frames = 5
+        train_frame_nums = [10, 20, 30, 0, 40]
+        test_frame_nums = list(set(range(50)) - set(train_frame_nums))
+        train_frame_nums = sorted(train_frame_nums[:n_views])
+        test_frame_nums = [f for f in test_frame_nums if
+                           ((f > min(train_frame_nums)) and (f < max(train_frame_nums))) or
+                           ((abs(min(train_frame_nums) - f) <= num_extrapolation_frames) or (abs(f - max(train_frame_nums)) <= num_extrapolation_frames))
+                           ]
+
+    intrinsics = np.loadtxt(intrinsics_filepath, delimiter=',').reshape((-1, 3, 3))[train_frame_nums]
+    extrinsics = np.loadtxt(extrinsics_filepath, delimiter=',').reshape((-1, 4, 4))[train_frame_nums]
 
 
-    for img_name in train_img_list:
-        if r != 1:
+    full_res_img_names = []
+    for idx, img_name in enumerate(train_frame_nums):
+        if(r != 1):
+            full_res_img_names.append(img_name)
+            img_name = img_name.replace('.jpg', '.png')
+            if(scene != 'horns' and scene != 'room' and scene != 'trex'):
+                img_name = f'image{final_idx_sub[idx]:03d}.png'
+            if(scene == 'room'):
+                img_name = img_name.replace('.JPG', '.png')
             os.system(f'cp ../images_{r}/' + img_name + '  images/' + img_name)
         else:
+            img_name = f'{img_name:04d}.png'
             os.system(f'cp ../images/' + img_name + '  images/' + img_name)
 
-    os.system('cp ../sparse/0/cameras.txt created/.')
-    if(r != 1):
-        #I want to change few values in this file
-        with open('created/cameras.txt', "r") as fid:
-            lines = fid.readlines()
-        with open('created/cameras.txt', "w") as fid:
-            for line in lines:
-                if len(line) > 0 and line[0] != "#":
-                    # if(scene == 'garden'):
-                    #     elems = line.split()
-                    #     elems[2] = str(int(math.floor(float(elems[2])/r))) #PINHOLE camera model
-                    #     elems[3] = str(int(math.floor(float(elems[3])/r)))
-                    #     elems[4] = str(float(float(elems[4])/r))
-                    #     elems[5] = str(float(float(elems[5])/r))
-                    #     elems[6] = str(int(math.floor(float(elems[6])/r)))
-                    #     elems[7] = str(int(math.floor(float(elems[7])/r)))
+    # os.system('cp ../sparse/0/cameras.txt created/.')
+    # if(r != 1):
+    #     with open('created/cameras.txt', "r") as fid:
+    #         lines = fid.readlines()
+    #     with open('created/cameras.txt', "w") as fid:
+    #         for line in lines:
+    #             if len(line) > 0 and line[0] != "#":
+    #                 elems = line.split()
+    #                 elems[2] = str(int(int(elems[2])/r))
+    #                 elems[3] = str(int(int(elems[3])/r))
+    #                 elems[4] = str(float(float(elems[4])/r))
+    #                 elems[5] = str(int(int(elems[5])/r))
+    #                 elems[6] = str(int(int(elems[6])/r))
 
-                    #     fid.write(' '.join(elems) + '\n')   
-                    # else:                     
-                    elems = line.split()
-                    elems[2] = str(int(proper_round(float(elems[2])/r))) #PINHOLE camera model
-                    elems[3] = str(int(proper_round(float(elems[3])/r)))
-                    elems[4] = str(float(float(elems[4])/r))
-                    elems[5] = str(float(float(elems[5])/r))
-                    elems[6] = str(int(proper_round(float(elems[6])/r)))
-                    elems[7] = str(int(proper_round(float(elems[7])/r)))
+    #                 fid.write(' '.join(elems) + '\n')
+    #             elif(len(line) > 0 and line[0] == '#'):
+    #                 fid.write(line)
 
-                    fid.write(' '.join(elems) + '\n')
-                elif(len(line) > 0 and line[0] == '#'):
-                    fid.write(line)
+    with open('created/cameras.txt', "w") as fid:
+        # Write intrinsics
+        for idx, intr in enumerate(intrinsics):
+            fid.write(f'{idx + 1} PINHOLE {intr[0, 2] * 2} {intr[1, 2] * 2} {intr[0, 0]} {intr[1, 1]} {intr[0, 2]} {intr[1, 2]}\n')
 
     with open('created/points3D.txt', "w") as fid:
         pass
@@ -226,11 +246,24 @@ def pipeline(scene, base_path, n_views):
     db = COLMAPDatabase.connect('database.db')
     db_images = db.execute("SELECT * FROM images")
     img_rank = [db_image[1] for db_image in db_images]
-    print(img_rank, res)
     with open('created/images.txt', "w") as fid:
         for idx, img_name in enumerate(img_rank):
-            print(img_name)
-            data = [str(1 + idx)] + [' ' + item for item in images[os.path.basename(img_name)]] + ['\n\n']
+            if(r != 1):
+                img_name = full_res_img_names[idx]
+            extrinsic = extrinsics[idx]
+            quarternions, translations = get_quaternions_and_translations(extrinsic)
+            db_image_data = db.execute(f"SELECT * FROM images WHERE name = '{img_name}'").fetchone()
+            camera_id = db_image_data[2]
+            data = [f'{idx + 1} {quarternions} {translations} {camera_id} {img_name} \n\n'] 
+
+            if(r != 1):
+                if (scene != 'horns' and scene != 'room' and scene != 'trex'):
+                    data[9] = f' image{final_idx_sub[idx]:03d}.png'
+                else:
+                    if(scene == 'room'):
+                        data[9] = data[9].replace('.JPG', '.png')
+                    else:
+                        data[9] = data[9].replace('.jpg', '.png')
             fid.writelines(data)
 
     os.system('colmap point_triangulator --database_path database.db --image_path images --input_path created  --output_path triangulated  --Mapper.ba_local_max_num_iterations 40 --Mapper.ba_local_max_refinements 3 --Mapper.ba_global_max_num_iterations 100')
@@ -240,8 +273,10 @@ def pipeline(scene, base_path, n_views):
     os.system('colmap stereo_fusion --workspace_path dense --output_path dense/fused.ply')
 
 
-for scene in ['bicycle', 'bonsai', 'counter', 'garden',  'kitchen', 'room', 'stump']:
-    pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/mipnerf360/', n_views = 12)  # please use absolute path!
-    pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/mipnerf360/', n_views = 20)
-    pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/mipnerf360/', n_views = 36)
-# pipeline('garden', base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/mipnerf360/', n_views = 12)
+for scene in ['00000', '00001', '00003', '00004', '00006']:
+    # pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 2, r = 1)  # please use absolute path!
+    # pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 3, r = 1)
+    # pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 4, r = 1)
+    # pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/RealEstate10K/', n_views = -1, r = 1)
+
+pipeline('00000', base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/RealEstate10K/', n_views = -1, r = 1)

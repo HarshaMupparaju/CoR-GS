@@ -226,16 +226,16 @@ def pipeline(scene, base_path, n_views, r):
                         data[9] = data[9].replace('.jpg', '.png')
             fid.writelines(data)
 
-    os.system('colmap point_triangulator --database_path database.db --image_path images --input_path created  --output_path triangulated  --Mapper.ba_local_max_num_iterations 40 --Mapper.ba_local_max_refinements 3 --Mapper.ba_global_max_num_iterations 100')
+    os.system('colmap point_triangulator --database_path database.db --image_path images --input_path created  --output_path triangulated  --Mapper.ba_local_max_num_iterations 40 --Mapper.ba_local_max_refinements 3 --Mapper.ba_global_max_num_iterations 100 --Mapper.tri_ignore_two_view_tracks 0')
     os.system('colmap model_converter  --input_path triangulated --output_path triangulated  --output_type TXT')
     os.system('colmap image_undistorter --image_path images --input_path triangulated --output_path dense')
     os.system('colmap patch_match_stereo --workspace_path dense')
     os.system('colmap stereo_fusion --workspace_path dense --output_path dense/fused.ply')
 
 
-# for scene in ['room']:# ['bonsai', 'counter', 'garden', 'kitchen', 'room', 'stump']:
-#     pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 2)  # please use absolute path!
-#     pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 3, r = 4)
-#     pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 4, r = 4)
+for scene in ['fern', 'flower', 'fortress', 'horns', 'leaves', 'orchids', 'room', 'trex']:
+    pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 2, r = 4)  # please use absolute path!
+    # pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 3, r = 4)
+    # pipeline(scene, base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 4, r = 4)
 
-pipeline('room', base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 5, r = 4)
+# pipeline('room', base_path = '/mnt/2tb-hdd/Harsha/CoR-GS/data/nerf_llff_data/', n_views = 5, r = 4)
